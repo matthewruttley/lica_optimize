@@ -1,9 +1,9 @@
 {
-  "name": "classification_logger",
-  "title": "classification_logger",
+  "name": "LICA Performance Testing",
+  "title": "LICA Performance Testing",
   "id": "jid1-7zhnjZoh1OfLzQ",
-  "description": "a basic add-on",
-  "author": "",
+  "description": "Tests classifier performance in Firefox",
+  "author": "Matthew Ruttley - mruttley@mozilla.com",
   "license": "MPL 2.0",
   "version": "0.1"
 }
