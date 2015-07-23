@@ -26,10 +26,12 @@
 //
 
 //import firefox services
-const {Cc, Ci} = require('chrome')
 const {data} = require('sdk/self') //used to reference files in the /data folder
+const {Cc, Ci} = require('chrome') //these next 3 used to parse URLs
 let eTLDService = Cc["@mozilla.org/network/effective-tld-service;1"].getService(Ci.nsIEffectiveTLDService);
-let ioService = Cc["@mozilla.org/network/io-service;1"].getService(Ci.nsIIOService) //these 2 used to parse URLs
+let ioService = Cc["@mozilla.org/network/io-service;1"].getService(Ci.nsIIOService) 
+
+//auxiliary functionality
 
 function makeTree(levels, end){
 	//Recursively builds a tree from a list
@@ -143,6 +145,8 @@ function compareSecondColumn(a, b) {
         return (a[1] < b[1]) ? -1 : 1;
     }
 }
+
+//actual functionality
 
 function LICA(){
     // Class that can classify a url using LICA.
