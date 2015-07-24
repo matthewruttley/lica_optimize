@@ -52,12 +52,9 @@ function makeTree(levels, end){
 
 function checkTree(levels, tree){
 	//Recursively checks a tree similar to the one made above in make_tree()
-	
 	if (levels.length == 1) {
 		if (tree.hasOwnProperty(levels[0])) {
-			if (typeof(tree[levels[0]]) != "object") {
-				return tree[levels[0]]
-			}
+			return tree[levels[0]]
 		}
 		return false
 	}else{
@@ -67,7 +64,6 @@ function checkTree(levels, tree){
 			return false
 		}
 	}
-	
 }
 
 function merge(a, b, path=false) {
@@ -104,7 +100,7 @@ function parseURL(url){
 		url = 'http://' + url
 	}
 	
-	url = ioService.newURI(url,null,null)
+	url = ioService.newURI(url.toLowerCase(),null,null)
 	components = {}
 	
 	components.suffix = eTLDService.getPublicSuffix(url) //co.uk
@@ -245,8 +241,15 @@ function LICA(){
 		}
 		
 		if (url != false) {
+			
+			//parse the url and return false if it is invalid
+			try {
+				var parsed_url = parseURL(url)
+			}catch(e){
+				return ['uncategorized', 'invalid_url', 'nsi_error']
+			}
+			
 			//first check that its not a blacklisted domain
-			var parsed_url = parseURL(url)
 			if (this.payload.ignore_domains.hasOwnProperty(parsed_url.tld)) {
 				if (this.payload.ignore_domains[parsed_url.tld].hasOwnProperty(parsed_url.suffix)) {
 					return ['uncategorized', 'ignored', 'ignored_domain']
@@ -257,28 +260,29 @@ function LICA(){
 			if (this.rules.domain_rules.hasOwnProperty(parsed_url.tld)) {
 				tmpResult = this.rules.domain_rules[parsed_url.tld]
 				tmpResult = tmpResult.concat(['single_topic_site'])
-				return tmpReturn
+				return tmpResult
 			}
 			
 			//check if it is a single topic host
 			let subdomain = parsed_url.host
 			if (subdomain.length > 0) {
-				if (this.host_rules.hasOwnProperty(parsed_url.tld)) {
-					let tmpResult = checkTree(subdomain.split('.'), domain_tree)
+				if (this.rules.host_rules.hasOwnProperty(parsed_url.tld)) {
+					let tmpResult = checkTree(subdomain.split('.'), this.rules.host_rules[parsed_url.tld])
 					if (tmpResult) {
-						tmpResult = tmpResult.concat(['single_topic_host'])
+						tmpResult = tmpResult.concat(['single_topic_subdomain'])
 						return tmpResult
 					}
 				}
 			}
 			
 			//check if it is a single topic path
-			if (this.path_rules.hasOwnProperty(parsed_url.tld)) {
+			if (this.rules.path_rules.hasOwnProperty(parsed_url.tld)) {
 				if (parsed_url.path.length > 0) {
-					if (this.path_rules[parsed_url.tld].hasOwnProperty(parsed_url.path)) {
-						toReturn = this.path_rules[parsed_url.tld][parsed_url.path]
-						toReturn = toReturn.concat(['single_topic_path'])
-						return toReturn
+					let first_chunk = parsed_url.path.split('/')[0]
+					if (this.rules.path_rules[parsed_url.tld].hasOwnProperty(first_chunk)) {//note that this currently only checks
+						tmpResult = this.rules.path_rules[parsed_url.tld][first_chunk]		//1 level of path i.e. these are the same:
+						tmpResult = tmpResult.concat(['single_topic_path'])					//domain.com/tech and domain.com/tech/apple
+						return tmpResult
 					}
 				}
 			}
@@ -292,7 +296,7 @@ function LICA(){
 		
 		//check that there are no ignored web words like "login" (don't want to catch some
 		//accidentally unencrypted personal data)
-		if (intersect_safe(this.webstoplist, words).length > 0) {
+		if (intersect_safe(this.stopwords.web, words).length > 0) {
 			return ['uncategorized', 'ignored', 'ignored_words']
 		}
 		
@@ -311,7 +315,7 @@ function LICA(){
 		
 		let matches = {}
 		for (let word of words) {
-			if (this.stoplist.hasOwnProperty(word) === false) {
+			if (this.stopwords.english.hasOwnProperty(word) === false) {
 				if (this.positive_keywords.hasOwnProperty(word)) {
 					let result = this.positive_keywords[word]
 					if (matches.hasOwnProperty(result[0]) === false) {
