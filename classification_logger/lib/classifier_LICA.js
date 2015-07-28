@@ -26,6 +26,7 @@
 //
 
 //import firefox services
+
 const {data} = require('sdk/self') //used to reference files in the /data folder
 const {Cc, Ci} = require('chrome') //these next 3 used to parse URLs
 let eTLDService = Cc["@mozilla.org/network/effective-tld-service;1"].getService(Ci.nsIEffectiveTLDService);
