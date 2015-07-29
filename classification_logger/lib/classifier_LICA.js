@@ -333,7 +333,7 @@ function LICA(){
 		
 		//if nothing was found, return unknown
 		if (Object.keys(matches).length==0) {
-			return ['uncategorized', 'unknown', 'keyword_matching']
+			return ['uncategorized', 'no words known, ' + words.length + ' found', 'keyword_matching']
 		}
 		
 		//Otherwise, now that we have a series of possible top+sub level categories that the url could be in,
