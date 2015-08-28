@@ -31,13 +31,15 @@
 
 
 //todo:
-// - don't build positive keywords at runtime
-// - are we optimizing for space or processing time?
+// - "don't build positive keywords at runtime" - are we optimizing for space or processing time?
 // - reconfigure the importing features
 // - how necessary is !var - I think it makes things less readable
 // - should the matching helper functionality be inside the LICA object?
 // - should everything be inside the LICA object?
 // - difference between web stopwords and english stopwords - intersect vs has own property
+// - what's wrong with multiline comments
+// - filtering out stopwords.english at the top instead
+// - 
 
 //import firefox services
 
@@ -257,7 +259,7 @@ let matching = {
           if (!matches.hasOwnProperty(result[0])) {
             matches[result[0]] = {};
           }
-          if (matches[result[0]].hasOwnProperty(result[1])===false) {
+          if (matches[result[0]].hasOwnProperty(result[1]) === false) {
             matches[result[0]][result[1]] = 1;
           }else{
             matches[result[0]][result[1]] += 1; //javascript really needs defaultdicts
@@ -441,7 +443,7 @@ function LICA(){
     let matches = matching.tallyKeywords(words)
 		
 		//if nothing was found, return unknown
-		if (Object.keys(matches).length==0) {
+		if (Object.keys(matches).length == 0) {
 			return ['uncategorized', 'no words known, ' + words.length + ' found', 'keyword_matching'];
 		}
 		
@@ -452,26 +454,26 @@ function LICA(){
 		//In the case above, 
 		// Sports=3 total and Science=11 total so we should choose Science
 		
-		let top_level = false;
+		let top_level_decision = "";
 		let top_level_ranking = [];
 		let item_tree = {}; //save the tree also as a list so we can sort sub_levels quickly later on
 		
 		//Iterate through the matches and produce a list like
 		// [['Sports', 3], ['Science', 11]]
 		//then sort it descending
-		for (let top_level of Object.keys(matches)) {
+		for (let top_level_cat of Object.keys(matches)) {
 			let sum_of_child_values = 0;
 			let sub_level_items = [];
 			
-			for (let sub_level of Object.keys(matches[top_level])){
-				let score = matches[top_level][sub_level];
+			for (let sub_level of Object.keys(matches[top_level_cat])){
+				let score = matches[top_level_cat][sub_level];
 				sum_of_child_values += score;
 				sub_level_items.push([sub_level, score]);
 			}
 			
-			top_level_ranking.push([top_level, sum_of_child_values]);
+			top_level_ranking.push([top_level_cat, sum_of_child_values]);
 			sub_level_items.sort(compareSecondColumn).reverse();
-			item_tree[top_level] = sub_level_items;
+			item_tree[top_level_cat] = sub_level_items;
 		}
 		top_level_ranking.sort(compareSecondColumn).reverse();
 		
@@ -481,17 +483,17 @@ function LICA(){
 		// - If there's more than one but they are both the same, then we return 'no consensus'.
 		
 		if(top_level_ranking.length == 1){
-			top_level = top_level_ranking[0][0];
+			top_level_decision = top_level_ranking[0][0];
 		}else{
 			if (top_level_ranking[0][1] === top_level_ranking[1][1]) { //special case if the top two are the same
 				return ['uncategorized', 'no consensus', 'keyword_matching'];
 			}else{
-				top_level = top_level_ranking[0][0];
+				top_level_decision = top_level_ranking[0][0];
 			}
 		}
 		
 		//now calculate the best sub-level category
-		let sub_level = false;
+		let sub_level_decision = "";
 		
 		//item_tree is of the format:
 		//	{
@@ -499,7 +501,7 @@ function LICA(){
 		//		science: [[general, 9], [chemistry, 2]]
 		//	}
 		//so we can just pick out possible sub level categories like:
-		let possible_sub_levels = item_tree[top_level];
+		let possible_sub_levels = item_tree[top_level_decision];
 		
 		//Now we have a decisioning process similar to the one above
 		// - If there's only one result, it must be that one
@@ -507,18 +509,18 @@ function LICA(){
 		// - If there's more than one but they are both the same, then say 'general'
 		
 		if (possible_sub_levels.length == 1) {
-			sub_level = item_tree[top_level][0][0];
+			sub_level_decision = item_tree[top_level_decision][0][0];
 		}else{
 			//sort them
 			possible_sub_levels.sort(compareSecondColumn).reverse();
 			if (possible_sub_levels[0][1] === possible_sub_levels[1][1]) { //special case if the top two are the same
-				sub_level = 'general';
+				sub_level_decision = 'general';
 			}else{
-				sub_level = possible_sub_levels[0][0];
+				sub_level_decision = possible_sub_levels[0][0];
 			}
 		}
 		
-		return [top_level, sub_level, 'keyword_matching'];
+		return [top_level_decision, sub_level_decision, 'keyword_matching'];
 	}
 
     this.init();
