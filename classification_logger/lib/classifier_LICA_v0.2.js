@@ -34,6 +34,7 @@
 // - reconfigure the importing features
 // - difference between web stopwords and english stopwords - intersect vs has own property
 // - filtering out stopwords.english at the top instead
+// - possibly merge single topic host/path/site spotting
 // - bigram matching working?
 
 //import firefox services
@@ -54,22 +55,6 @@ function LICA(){
   
   //Auxiliary functionality
   this.auxiliary = {
-    convert_list_to_nested_object: function(levels, end){
-      //Recursively builds a nested object from a list
-      //`levels` are levels you want to integrate, e.g. ['one', 'two', 'three']
-      //`end` is the value of the end item e.g. 'test'
-      //The result would be: {'one': {'two': {'three': 'test'}}}
-      
-      if (levels.length == 1) {
-        let x = {};
-        x[levels[0]] = end;
-        return x;
-      }else{
-        let x = {};
-        x[levels[0]] = convert_list_to_nested_object(levels.slice(1), end);
-        return x;
-      }
-    },
     checkTree: function(levels, tree){
       //Checks to see if a series of nested keys exists in a javascript object
       
@@ -114,7 +99,7 @@ function LICA(){
       
       //have to add scheme if not present or ioService throws an error
       if (url.substring(0,4) != 'http') {
-        return false;
+        throw "No valid url scheme found"
       }
       
       url = ioService.newURI(url.toLowerCase(),null,null);
@@ -174,8 +159,8 @@ function LICA(){
       //check that a tld isn't blacklisted
       //accepts a parsed url
       //returns a boolean
-      if (payload_files.ignore_domains.hasOwnProperty(parsedURL.tld)) {
-        if (payload_files.ignore_domains[parsedURL.tld].hasOwnProperty(parsedURL.suffix)) {
+      if (this.payload.ignore_domains.hasOwnProperty(parsedURL.tld)) {
+        if (this.payload.ignore_domains[parsedURL.tld].hasOwnProperty(parsedURL.suffix)) {
           return true
         }
       }
@@ -186,8 +171,8 @@ function LICA(){
       //accepts a parsed url
       //returns either a classification [top level, sub level, 'single_topic_site'],
       //or false
-      if (payload_files.domain_rules.hasOwnProperty(parsedURL.tld)) {
-        let tmpResult = payload_files.domain_rules[parsedURL.tld];
+      if (this.payload.domain_rules.hasOwnProperty(parsedURL.tld)) {
+        let tmpResult = this.payload.domain_rules[parsedURL.tld];
         tmpResult.push(['single_topic_site']);
         return tmpResult;
       }
@@ -200,8 +185,8 @@ function LICA(){
       //or false
       let subdomain = parsedURL.host;
       if (subdomain.length > 0) {
-        if (payload_files.host_rules.hasOwnProperty(parsedURL.tld)) {
-          let tmpResult = checkTree(subdomain.split('.'), payload_files.host_rules[parsedURL.tld]);
+        if (this.payload.host_rules.hasOwnProperty(parsedURL.tld)) {
+          let tmpResult = this.auxiliary.checkTree(subdomain.split('.'), this.payload.host_rules[parsedURL.tld]);
           if (tmpResult) {
             tmpResult.push(['single_topic_subdomain']);
             return tmpResult;
@@ -215,14 +200,14 @@ function LICA(){
       //accepts a parsed URL
       //returns either a classification [top level, sub level, 'single_topic_path'],
       //or false
-      if (payload_files.path_rules.hasOwnProperty(parsedURL.tld)) {
+      if (this.payload.path_rules.hasOwnProperty(parsedURL.tld)) {
         if (parsedURL.path.length > 0) {
           let first_chunk = parsedURL.path.split('/')[0]
-          if (payload_files.path_rules[parsedURL.tld].hasOwnProperty(first_chunk)) {
+          if (this.payload.path_rules[parsedURL.tld].hasOwnProperty(first_chunk)) {
             //note that this currently only checks 1 level of path
             //i.e. these are the same:
             // domain.com/tech and domain.com/tech/apple
-            let tmpResult = payload_files.path_rules[parsedURL.tld][first_chunk]; 
+            let tmpResult = this.payload.path_rules[parsedURL.tld][first_chunk]; 
             tmpResult.push(['single_topic_path']); 
             return tmpResult;
           }
@@ -232,7 +217,7 @@ function LICA(){
     },
     containsStopwords: function(words, stopword_type){
       //checks for the existence of stopwords
-      if (intersect(payload_files.stopwords[stopword_type], words)) {
+      if (this.auxiliary.intersect(this.payload.stopwords[stopword_type], words)) {
         return true;
       }
       return false;
@@ -241,9 +226,9 @@ function LICA(){
       //creates a keyword tally as a nested javascript object
       let matches = {};
       for (let word of words) {
-        if (!payload_files.stopwords[stopword_type].hasOwnProperty(word)) {
-          if (payload_files.positive_keywords.hasOwnProperty(word)) {
-            let result = payload_files.positive_keywords[word];
+        if (!this.payload.stopwords[stopword_type].hasOwnProperty(word)) {
+          if (this.payload.keywords.hasOwnProperty(word)) {
+            let result = this.payload.keywords[word];
             if (!matches.hasOwnProperty(result[0])) {
               matches[result[0]] = {};
             }
@@ -261,20 +246,22 @@ function LICA(){
   
   //Actual functionality
   this.init = function(){
-    //This is an initialization function used to import the payload file into the classifier.
-    //File reading is asynchronous so this must be separate from the actual set up
-    //function (set_up_classifier()) later on, which it will call afterwards. 
+    //This is an initialization function used to import the payload file
+    //via async read into the classifier.
     
     //calculate full payload location
     let payload_path = OS.Path.join(OS.Constants.Path.localProfileDir, payload_file_name);
-    let promise = readTextFile(payload_file_location); //send it out
+    let promise = this.auxiliary.readTextFile(payload_file_location); //send it out
     
     promise.then(
       function onSuccess(fileContent) {
         //parse the response
         this.payload = JSON.parse(fileContent);
-        //and complete the rest of the init process
-        this.set_up_classifier();
+        
+        //convert the stopword list to javascript Set() for O(1) lookups
+        for (let type of Object.keys(this.stopwords)){
+          this.stopwords[type] = new Set(this.stopwords[type]);
+        }
       },
       function onFail() {
         console.error("Failed to load the LICA classifier payload file.");
@@ -282,127 +269,48 @@ function LICA(){
     );
   };
   
-  this.set_up_classifier = function() {
-    //Sets up the classifier
-    
-    //The payload is currently in the format: {category: [keyword, keyword...]}
-    //It is kept in this format to make it easier to edit
-    //Build a mapping in memory of the opposite: {kw: [top level category, sub level category]}
-    this.positive_keywords = {};
-    for (let top_level of Object.keys(this.payload_files.positive_words)) {
-      let sub_level = this.payload_files.positive_words[top_level];
-      for (let category of Object.keys(sub_level)) {
-        keywords = sub_level[category];
-        for (let keyword of keywords) {
-          this.positive_keywords[keyword] = [top_level, category];
-        }
-      }
-    }
-  
-    //create a stoplist object with words we aren't concerned with (e.g. and, but, the)
-    //this is useful so we can focus on just the nouns that describe the topic
-    this.stopwords = JSON.parse(data.load(payload_files.STOPWORDS));
-    for (let type of Object.keys(this.stopwords)){
-      //convert each list to a Set for faster lookup times
-      this.stopwords[type] = new Set(this.stopwords[type]);
-    }
-  
-    //import mozilla's taxonomy
-    let mozcat = JSON.parse(data.load(payload_files.MOZCAT_HEIRARCHY));
-    //currently in the format: top_level: [sub_level, sub_level, ...]
-    //lookups are faster if it is sub_level: [top_level, sub_level]
-    this.taxonomy = {};
-    for (let top_level of Object.keys(mozcat)) {
-      this.taxonomy[top_level] = [top_level, "general"];
-      for (let sub_level of mozcat[top_level]) {
-        this.taxonomy[sub_level] = [top_level, sub_level];
-      }
-    }
-    
-    //import domain rules and point them to [top_level, sub_level] pairs made previously
-    for (let domain of Object.keys(payload_files.domain_rules)) {
-      payload_files.domain_rules[domain] = this.taxonomy[payload_files.domain_rules[domain]];
-    }
-  
-    //convert the host rules into an easily searchable format
-    // from: 	"au.movies.yahoo.com": "television",
-    // 	 to:	"yahoo.com": { 'movies': { 'au': ['arts & entertainment', 'television'] } }
-    // then merge into the main host rules object
-  
-    let tmp_host_rules = {} //store them temporarily here then fill out the object
-    for (let host_rule of Object.keys(payload_files.host_rules)) {
-      let category = this.taxonomy[payload_files.host_rules[host_rule]];
-      let components = parseURL(host_rule);
-      if (components) {
-        let tree = convert_list_to_nested_object(components.host.split('.').reverse(), category);
-        let tld_object = {};
-        tld_object[components.tld] = tree;
-        merge(tmp_host_rules, tld_object);
-      }
-    }
-    this.rules.host_rules = tmp_host_rules;
-  
-    //convert the path rules into an easily searchable format
-    let tmp_path_rules = {};
-    for (let path_rule of Object.keys(payload_files.path_rules)) {
-      let category = this.taxonomy[payload_files.path_rules[path_rule]];
-      let components = parseURL(path_rule);
-      if (components) {
-        let path = components.path.split('/')[0];
-        if (!tmp_path_rules.hasOwnProperty(components.tld)) {
-          tmp_path_rules[components.tld] = {};
-        }
-        tmp_path_rules[components.tld][path] = category;
-      }
-    }
-    this.rules.path_rules = tmp_path_rules;
-  };
-	
 	this.classify = function(url="", title=""){
 		//Returns a classification in the format [top_level, sub_level, method/reason]
 		//This fits with the mozcat heirarchy/taxonomy: https://github.com/matthewruttley/mozcat
 		
 		if (!url && !title){
-			return ['uncategorized', 'invalid_data', 'empty_values'];
+			return ['uncategorized', 'invalid_data', 'empty values'];
 		}
 		
 		if (url) {
 			//parse the url and return false if it is invalid
 			try {
-				var parsed_url = parseURL(url);
-				if (!parsed_url) {
-					return ['uncategorized', 'invalid_url', 'nsi_error'];
-				}
+				var parsed_url = this.auxiliary.parseURL(url);
 			}catch(e){
-				return ['uncategorized', 'url_parse_error', e];
+				return ['uncategorized', 'url parse error', e];
 			}
 			
 			//first check that its not a blacklisted domain
-      if (matching.isBlacklistedDomain(parsed_url)) {
-        return ['uncategorized', 'ignored', 'ignored_domain'];
+      if (this.matching.isBlacklistedDomain(parsed_url)) {
+        return ['uncategorized', 'ignored', 'ignored domain'];
       }
 			
 			//check if it is a single topic site
-      let decision = matching.isSingleTopicSite(parsed_url);
+      let decision = this.matching.isSingleTopicSite(parsed_url);
       if (decision) return decision;
 			
 			//check if it is a single topic host
-      decision = matching.isSingleTopicHost(parsed_url);
+      decision = this.matching.isSingleTopicHost(parsed_url);
       if (decision) return decision;
 			
 			//check if it is a single topic path
-      decision = matching.isSingleTopicPath(parsed_url);
+      decision = this.matching.isSingleTopicPath(parsed_url);
       if (decision) return decision;
 		}
 		
 		//URL is not recognized in the domain payloads, so we now try to classify it using keywords
 		
-    let words = auxiliary.tokenize(url, title) //tokenize the url (i.e. extract things that may be words)
+    let words = this.auxiliary.tokenize(url, title) //tokenize the url (i.e. extract things that may be words)
 		
     // check that there are no ignored web words like "login" (don't want to catch some
     // accidentally unencrypted personal data)
-    if (matching.containsStopwords(words, 'web')) {
-      return ['uncategorized', 'ignored', 'ignored_words']; 
+    if (this.matching.containsStopwords(words, 'web')) {
+      return ['uncategorized', 'ignored', 'ignored words']; 
     }
 		
 		//now record which words correspond to which categories, and create a tally for each
@@ -418,11 +326,11 @@ function LICA(){
 		//		}
 		//	}
 		
-    let matches = matching.tallyKeywords(words)
+    let matches = this.matching.tallyKeywords(words)
 		
 		//if nothing was found, return unknown
 		if (Object.keys(matches).length == 0) {
-			return ['uncategorized', 'no words known, ' + words.length + ' found', 'keyword_matching'];
+			return ['uncategorized', 'no words known, ' + words.length + ' found', 'keyword matching'];
 		}
 		
 		//Otherwise, now that we have a series of possible top+sub level categories that the url could be in,
@@ -450,10 +358,10 @@ function LICA(){
 			}
 			
 			top_level_ranking.push([top_level_cat, sum_of_child_values]);
-			sub_level_items.sort(compareSecondColumn).reverse();
+			sub_level_items.sort(this.auxiliary.compareSecondColumn).reverse();
 			item_tree[top_level_cat] = sub_level_items;
 		}
-		top_level_ranking.sort(compareSecondColumn).reverse();
+		top_level_ranking.sort(this.auxiliary.compareSecondColumn).reverse();
 		
 		//Now we have a decisioning process.
 		// - If there's only one result, it must be that one
@@ -464,7 +372,7 @@ function LICA(){
 			top_level_decision = top_level_ranking[0][0];
 		}else{
 			if (top_level_ranking[0][1] === top_level_ranking[1][1]) { //special case if the top two are the same
-				return ['uncategorized', 'no consensus', 'keyword_matching'];
+				return ['uncategorized', 'no consensus', 'keyword matching'];
 			}else{
 				top_level_decision = top_level_ranking[0][0];
 			}
@@ -490,7 +398,7 @@ function LICA(){
 			sub_level_decision = item_tree[top_level_decision][0][0];
 		}else{
 			//sort them
-			possible_sub_levels.sort(compareSecondColumn).reverse();
+			possible_sub_levels.sort(this.auxiliary.compareSecondColumn).reverse();
 			if (possible_sub_levels[0][1] === possible_sub_levels[1][1]) { //special case if the top two are the same
 				sub_level_decision = 'general';
 			}else{
@@ -498,7 +406,7 @@ function LICA(){
 			}
 		}
 		
-		return [top_level_decision, sub_level_decision, 'keyword_matching'];
+		return [top_level_decision, sub_level_decision, 'keyword matching'];
 	};
 
   this.init();
