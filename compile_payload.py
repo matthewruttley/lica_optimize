@@ -1,7 +1,7 @@
 #Python Script that compiles the LICA payload together
 
 from sys import argv
-from json import loads
+from json import loads, dump
 
 from requests import get
 
@@ -10,7 +10,7 @@ from requests import get
 FILE_LOCATIONS = {
 	"mozcat_heirarchy": "https://raw.githubusercontent.com/matthewruttley/mozcat/master/mozcat_heirarchy.json",
 	"domain_rules": "https://raw.githubusercontent.com/matthewruttley/lica_optimize/master/classification_logger/data/payload_domain_rules.json",
-	"keywords": "https://github.com/matthewruttley/lica_optimize/blob/master/classification_logger/data/payload_lica.json",
+	"keywords": "https://raw.githubusercontent.com/matthewruttley/lica_optimize/master/classification_logger/data/payload_lica.json",
 	"stopwords": "https://raw.githubusercontent.com/matthewruttley/lica_optimize/master/classification_logger/data/stopwords.json"
 }
 
@@ -27,7 +27,7 @@ def get_remote_payloads():
 			raise Exception("Could not download {0} from {1}".format(file_name, url))
 			exit()
 		else:
-			heirarchy = loads(resp.text)
+			payloads[file_name] = loads(resp.text)
 	
 	return payloads
 
@@ -39,19 +39,19 @@ def process_files(output_file='lica_payload.json'):
 	
 	final_payload = { #create 
 		"domain_rules": payload_files['domain_rules']['domain_rules'],
-		"host_rules": payload_files['host_rules'],
-		"path_rules": payload_files['path_rules'],
+		"host_rules": payload_files['domain_rules']['host_rules'],
+		"path_rules": payload_files['domain_rules']['path_rules'],
 		"ignore_domains": payload_files['keywords']['ignore_domains'],
 		"bad_domain_specific": payload_files['keywords']['bad_domain_specific'],
 		"keywords": {},
-		"stopwords": payload_files['path_rules']['stopwords']
+		"stopwords": payload_files['stopwords']
 	}
 	
 	#process keywords
 	#from: [toplevel, sublevel]: [word, word, word]
 	#to: {word: [top, sub], word: [top, sub]}
 	
-	for top_level, sub_level_items in payload_files['keywords']['positive_keywords'].iteritems():
+	for top_level, sub_level_items in payload_files['keywords']['positive_words'].iteritems():
 		for sub_level, keywords in sub_level_items.iteritems():
 			for keyword in keywords:
 				final_payload['keywords'][keyword] = [top_level, sub_level]
