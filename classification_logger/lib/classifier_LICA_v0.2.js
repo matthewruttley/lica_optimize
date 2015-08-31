@@ -50,7 +50,7 @@ function LICA(){
   // Class that can classify a url using LICA.
   
   //Settings
-  this.payload_file_location = "lica_payload.json";
+  this.payload_file_name = "lica_payload.json";
   
   //Auxiliary functionality
   this.auxiliary = {
@@ -147,24 +147,18 @@ function LICA(){
         return (a[1] < b[1]) ? -1 : 1;
       }
     },
-    readTextFiles: function(file_locations){
+    readTextFile: function(file_location){
       //Loosely based on:
       //https://developer.mozilla.org/en-US/docs/Mozilla/JavaScript_code_modules/Promise.jsm/Examples
-      //Accepts the payload_files object as input, and tries to load them all
-      //Returns their text
+      //Accepts the payload files location as input, and tries to load it
+      //Returns its text
       
-      let promises = [];
       let decoder = new TextDecoder();
+      let promise = OS.File.read(file_location) //read it async
+      promise = promise.then(function onSuccess(array) {
+        return decoder.decode(array);
+      });
       
-      for (let file_description of file_locations) {//iterate through the keys of the object
-        let file_location = file_locations[file_description] //grab the location
-        let promise = OS.File.read(file_location) //read it async
-        promise = promise.then(function onSuccess(array) {
-          return decoder.decode(array);
-        });
-        promises.push([file_description, promise]);
-      }
-      return Promise.all(promises); //once they're all done, return them as an array of arrays
     },
     tokenize: function(url, title){
       //tokenizes (i.e. finds words) in a string
@@ -267,31 +261,23 @@ function LICA(){
   
   //Actual functionality
   this.init = function(){
-    //This is an initialization function used to import files into the classifier.
+    //This is an initialization function used to import the payload file into the classifier.
     //File reading is asynchronous so this must be separate from the actual set up
-    //function later on, and just call it. 
+    //function (set_up_classifier()) later on, which it will call afterwards. 
     
-    //convert payload files into payload locations
-    locations = []
-    for (let entry of payload_files) {
-      payload_files[entry] = OS.Path.join(OS.Constants.Path.localProfileDir, payload_files[entry])
-    }
-    //send it out
-    let promise = readTextFiles(payload_files);
+    //calculate full payload location
+    let payload_path = OS.Path.join(OS.Constants.Path.localProfileDir, payload_file_name);
+    let promise = readTextFile(payload_file_location); //send it out
     
     promise.then(
-      function onSuccess(filesContent) {
-        //now plug the values back into the payload_files object
-        for (let entry of filesContent) {
-          payload_files[entry[0]] = JSON.parse(entry[1])
-        }
-        
+      function onSuccess(fileContent) {
+        //parse the response
+        this.payload = JSON.parse(fileContent);
         //and complete the rest of the init process
-        this.set_up_classifier()
-        
+        this.set_up_classifier();
       },
       function onFail() {
-        console.error("Failed to load all LICA classifier files.");
+        console.error("Failed to load the LICA classifier payload file.");
       }
     );
   };
