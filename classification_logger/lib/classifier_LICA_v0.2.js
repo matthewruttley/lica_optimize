@@ -38,8 +38,9 @@
 //import firefox services
 
 const {data} = require('sdk/self'); //used to reference files in the /data folder
-const {Cc, Ci} = require('chrome'); //these next 3 used to parse URLs
-const {TextDecoder, OS} = Cu.import("resource://gre/modules/osfile.jsm", {});
+const {Cc, Ci, Cu} = require('chrome'); //these next 3 used to parse URLs
+//const {Promise} = Cu.import("resource://gre/modules/Promise.jsm");
+const {TextDecoder, OS} = Cu.import("resource://gre/modules/osfile.jsm");
 let eTLDService = Cc["@mozilla.org/network/effective-tld-service;1"].getService(Ci.nsIEffectiveTLDService);
 let ioService = Cc["@mozilla.org/network/io-service;1"].getService(Ci.nsIIOService);
 
@@ -62,7 +63,7 @@ function LICA(){
         throw "No valid url scheme found";
       }
       
-      url = ioService.newURI(url.toLowerCase(),null,null);
+      url = ioService.newURI(url.toLowerCase(), null, null);
       let components = {};
       
       components.suffix = eTLDService.getPublicSuffix(url); //co.uk
@@ -71,17 +72,6 @@ function LICA(){
       components.path = url.path.split('?')[0].split('#')[0].substring(1); //thing/something
       
       return components;
-    },
-    intersect: function(a, b){
-      //checks if two arrays intersect at all
-      
-      for (let element of a) {
-        if (b.indexOf(element) != -1) {
-          return true;
-        }
-      }
-      
-      return false;
     },
     compareSecondColumn: function(a, b) {
       //http://stackoverflow.com/a/16097058/849354
@@ -100,9 +90,14 @@ function LICA(){
       
       let decoder = new TextDecoder();
       let promise = OS.File.read(file_location) //read it async
-      promise = promise.then(function onSuccess(array) {
-        return decoder.decode(array);
-      });
+      promise = promise.then(
+        function onSuccess(array) {
+          return decoder.decode(array);
+        },
+        function onFailure(){
+          return false
+        }
+      );
       
     },
     tokenize: function(url, title){
@@ -112,12 +107,12 @@ function LICA(){
       let words = [];
       for (let word of matcher_string.match(/[a-z]{3,}/g)) { //must be at least 3 characters each
         if (!this.payload.stopwords.english.has(word)) { //make sure its not a stopword
-          words.push(word)
+          words.push(word);
         }
       }
-      return words
+      return words;
     }
-  };
+  }
 
   //Classifier matching helper functionality
   this.matching = {
@@ -127,10 +122,10 @@ function LICA(){
       //returns a boolean
       if (this.payload.ignore_domains.hasOwnProperty(parsedURL.tld)) {
         if (this.payload.ignore_domains[parsedURL.tld].hasOwnProperty(parsedURL.suffix)) {
-          return true
+          return true;
         }
       }
-      return false
+      return false;
     },
     isSingleTopicSite: function(parsedURL){
       //checks if a domain is a single topic site
@@ -168,7 +163,7 @@ function LICA(){
       //or false
       if (this.payload.path_rules.hasOwnProperty(parsedURL.tld)) {
         if (parsedURL.path.length > 0) {
-          let first_chunk = parsedURL.path.split('/')[0]
+          let first_chunk = parsedURL.path.split('/')[0];
           if (this.payload.path_rules[parsedURL.tld].hasOwnProperty(first_chunk)) {
             //note that this currently only checks 1 level of path
             //i.e. these are the same:
@@ -183,8 +178,10 @@ function LICA(){
     },
     containsStopwords: function(words, stopword_type){
       //checks for the existence of stopwords
-      if (this.auxiliary.intersect(this.payload.stopwords[stopword_type], words)) {
-        return true;
+      for (let word of words) {
+        if (this.payload.stopwords[stopword_type].has(word)) {
+          return true;
+        }
       }
       return false;
     },
@@ -206,7 +203,7 @@ function LICA(){
           }
         }
       }
-      return matches
+      return matches;
     }
   }
   
@@ -216,10 +213,10 @@ function LICA(){
     //via async read into the classifier.
     
     //calculate full payload location
-    let payload_path = OS.Path.join(OS.Constants.Path.localProfileDir, payload_file_name);
-    let promise = this.auxiliary.readTextFile(payload_file_location); //send it out
+    let payload_path = OS.Path.join(OS.Constants.Path.localProfileDir, this.payload_file_name);
+    let file_load_promise = this.auxiliary.readTextFile(payload_path); //send it out
     
-    promise.then(
+    file_load_promise.then(
       function onSuccess(fileContent) {
         //parse the response
         this.payload = JSON.parse(fileContent);
@@ -267,7 +264,7 @@ function LICA(){
 		
 		//URL is not recognized in the domain payloads, so we now try to classify it using keywords
 		
-    let words = this.auxiliary.tokenize(url, title) //tokenize the url (i.e. extract things that may be words)
+    let words = this.auxiliary.tokenize(url, title); //tokenize the url (i.e. extract things that may be words)
 		
     // check that there are no ignored web words like "login" (don't want to catch some
     // accidentally unencrypted personal data)
@@ -288,7 +285,7 @@ function LICA(){
 		//		}
 		//	}
 		
-    let matches = this.matching.tallyKeywords(words)
+    let matches = this.matching.tallyKeywords(words);
 		
 		//if nothing was found, return unknown
 		if (Object.keys(matches).length === 0) {
