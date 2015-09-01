@@ -30,11 +30,9 @@
 //   --- Also web stopwords like account, login, password that we want to ignore 
 //
 
+"use strict";
+
 //todo:
-// - reconfigure the importing features
-// - difference between web stopwords and english stopwords - intersect vs has own property
-// - filtering out stopwords.english at the top instead
-// - possibly merge single topic host/path/site spotting
 // - bigram matching working?
 
 //import firefox services
@@ -55,51 +53,13 @@ function LICA(){
   
   //Auxiliary functionality
   this.auxiliary = {
-    checkTree: function(levels, tree){
-      //Checks to see if a series of nested keys exists in a javascript object
-      
-      if (levels.length == 1) {
-        if (tree.hasOwnProperty(levels[0])) {
-          return tree[levels[0]];
-        }
-        return false;
-      }else{
-        if (tree.hasOwnProperty(levels[0])) {
-          return checkTree(levels.slice(1), tree[levels[0]]);
-        }else{
-          return false;
-        }
-      }
-    },
-    merge: function(first_object, second_object, path=false) {
-      //merges two javascript objects
-      //js port of: http://stackoverflow.com/a/7205107/849354
-      //e.g.:
-      // object 1: {'google.com': {'ads': [business, advertising]}}
-      // object 2: {'google.com': {'shopping': [business, ecommerce]}}
-      // output {'google.com': {'shopping': [business, ecommerce], 'ads': [business, advertising]}}
-      
-      if (!path) {
-        path = [];
-      }
-      for(let key of Object.keys(second_object)){ //for each key in the object
-        if (first_object.hasOwnProperty(key)) { //either merge
-          if ((typeof(first_object) === "object") && (typeof(second_object) === "object")) {
-            merge(first_object[key], second_object[key], path + [key.toString()]);
-          }
-        }else{
-          first_object[key] = second_object[key]; //or just add the key in
-        }
-      }
-      return first_object;
-    },
     parseURL: function(url){
       //Accepts a url e.g.: https://news.politics.bbc.co.uk/thing/something?whatever=1
       //returns a useful dictionary with the components
       
       //have to add scheme if not present or ioService throws an error
       if (url.substring(0,4) != 'http') {
-        throw "No valid url scheme found"
+        throw "No valid url scheme found";
       }
       
       url = ioService.newURI(url.toLowerCase(),null,null);
@@ -147,8 +107,14 @@ function LICA(){
     },
     tokenize: function(url, title){
       //tokenizes (i.e. finds words) in a string
+      //also removes english stopwords
       let matcher_string = url+" "+title;
-      let words = matcher_string.match(/[a-z]{3,}/g); //must be at least 3 characters each
+      let words = [];
+      for (let word of matcher_string.match(/[a-z]{3,}/g)) { //must be at least 3 characters each
+        if (!this.payload.stopwords.english.has(word)) { //make sure its not a stopword
+          words.push(word)
+        }
+      }
       return words
     }
   };
@@ -186,8 +152,8 @@ function LICA(){
       let subdomain = parsedURL.host;
       if (subdomain.length > 0) {
         if (this.payload.host_rules.hasOwnProperty(parsedURL.tld)) {
-          let tmpResult = this.auxiliary.checkTree(subdomain.split('.'), this.payload.host_rules[parsedURL.tld]);
-          if (tmpResult) {
+          if (this.payload.host_rules[parsedURL.tld].hasOwnProperty(subdomain)) {
+            tmpResult = this.payload.host_rules[parsedURL.tld][subdomain];
             tmpResult.push(['single_topic_subdomain']);
             return tmpResult;
           }
@@ -242,7 +208,7 @@ function LICA(){
       }
       return matches
     }
-  };
+  }
   
   //Actual functionality
   this.init = function(){
@@ -267,7 +233,7 @@ function LICA(){
         console.error("Failed to load the LICA classifier payload file.");
       }
     );
-  };
+  }
   
 	this.classify = function(url="", title=""){
 		//Returns a classification in the format [top_level, sub_level, method/reason]
@@ -290,17 +256,13 @@ function LICA(){
         return ['uncategorized', 'ignored', 'ignored domain'];
       }
 			
-			//check if it is a single topic site
-      let decision = this.matching.isSingleTopicSite(parsed_url);
-      if (decision) return decision;
-			
-			//check if it is a single topic host
-      decision = this.matching.isSingleTopicHost(parsed_url);
-      if (decision) return decision;
-			
-			//check if it is a single topic path
-      decision = this.matching.isSingleTopicPath(parsed_url);
-      if (decision) return decision;
+			//check if it is a single topic site, host or path
+      for (let checker of ['isSingleTopicSite', 'isSingleTopicHost', 'isSingleTopicPath']) {
+        let decision = this.matching[checker](parsed_url);
+        if (decision){
+          return decision;
+        }
+      }
 		}
 		
 		//URL is not recognized in the domain payloads, so we now try to classify it using keywords
@@ -314,7 +276,7 @@ function LICA(){
     }
 		
 		//now record which words correspond to which categories, and create a tally for each
-		//top level / sub level a bit like:
+		//top level / sub level like:
 		//	{
 		//		sports: {
 		//			golf: 1,
@@ -329,7 +291,7 @@ function LICA(){
     let matches = this.matching.tallyKeywords(words)
 		
 		//if nothing was found, return unknown
-		if (Object.keys(matches).length == 0) {
+		if (Object.keys(matches).length === 0) {
 			return ['uncategorized', 'no words known, ' + words.length + ' found', 'keyword matching'];
 		}
 		
@@ -407,7 +369,7 @@ function LICA(){
 		}
 		
 		return [top_level_decision, sub_level_decision, 'keyword matching'];
-	};
+	}
 
   this.init();
 }
