@@ -92,10 +92,12 @@ function LICA(){
       let promise = OS.File.read(file_location) //read it async
       promise = promise.then(
         function onSuccess(array) {
+          console.log('Success function called!')
           return decoder.decode(array);
         },
         function onFailure(){
-          return false
+          console.log('Failure function called!')
+          return false;
         }
       );
       
