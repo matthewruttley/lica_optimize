@@ -217,6 +217,8 @@ function LICA(){
         throw "Could not load LICA payload file"
       }
     );
+    
+    return promise
   }
   
 	this.classify = function(url="", title=""){

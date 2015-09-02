@@ -68,8 +68,12 @@ exports["test classification results"] = function(assert) {
 }
 
 
-function onSuccess() {
-	require("sdk/test").run(exports);
-}
+lica.then(
+	function onSuccess() {
+		require("sdk/test").run(exports);
+	}
+)
+
+
 
 
