@@ -51,31 +51,6 @@ tests = [
 	}
 ]
 
-//var {LICA} = require('./classifier_LICA_v0.2')
-//let { before, after } = require('sdk/test/utils');
-//
-//exports.testURLs = function (assert, done) {
-//	for (let test of tests) {	
-//		console.log('About to classify something');
-//		result = lica.classify(test.url);
-//		//diagnostics
-//		//if (JSON.stringify(result) == JSON.stringify(test.expected_result)) {validity='valid'}else{validity='invalid'}
-//		//console.log('expected: ' + test.expected_result + " and got " + result + " which is " + validity)
-//		assert.ok(JSON.stringify(result) == JSON.stringify(test.expected_result), test.name);
-//	}
-//  done();
-//};
-//
-//before(exports, function (name, assert, done) {
-//	var lica = new LICA()
-//	lica.then(function(){
-//			console.log("LICA's promise returned correctly");
-//			done()
-//		})
-//});
-//
-//require('sdk/test').run(exports);
-
 //Import and load LICA
 var {LICA} = require('./classifier_LICA_v0.2')
 var lica = new LICA()
