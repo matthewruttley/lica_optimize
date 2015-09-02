@@ -200,7 +200,7 @@ function LICA(){
     let decoder = new TextDecoder();
     let promise = OS.File.read(payload_path) //read it async
     
-    promise = promise.then(
+    return promise.then(
       function onSuccess(payload_json) {
         
         console.log('success function called')
@@ -218,7 +218,6 @@ function LICA(){
       }
     );
     
-    return promise
   }
   
 	this.classify = function(url="", title=""){
