@@ -82,26 +82,6 @@ function LICA(){
         return (a[1] < b[1]) ? -1 : 1;
       }
     },
-    readTextFile: function(file_location){
-      //Loosely based on:
-      //https://developer.mozilla.org/en-US/docs/Mozilla/JavaScript_code_modules/Promise.jsm/Examples
-      //Accepts the payload files location as input, and tries to load it
-      //Returns its text
-      
-      let decoder = new TextDecoder();
-      let promise = OS.File.read(file_location) //read it async
-      promise = promise.then(
-        function onSuccess(array) {
-          console.log('Success function called!')
-          return decoder.decode(array);
-        },
-        function onFailure(){
-          console.log('Failure function called!')
-          return false;
-        }
-      );
-      
-    },
     tokenize: function(url, title){
       //tokenizes (i.e. finds words) in a string
       //also removes english stopwords
@@ -215,21 +195,24 @@ function LICA(){
     //via async read into the classifier.
     
     //calculate full payload location
-    let payload_path = OS.Path.join(OS.Constants.Path.localProfileDir, this.payload_file_name);
-    let file_load_promise = this.auxiliary.readTextFile(payload_path); //send it out
+    let payload_path = OS.Path.join(OS.Constants.Path.desktopDir, this.payload_file_name);
     
-    file_load_promise.then(
-      function onSuccess(fileContent) {
-        //parse the response
-        this.payload = JSON.parse(fileContent);
+    let decoder = new TextDecoder();
+    let promise = OS.File.read(payload_path) //read it async
+    
+    promise = promise.then(
+      function onSuccess(payload_json) {
+        
+        this.payload = JSON.parse(decoder.decode(payload_json));
         
         //convert the stopword list to javascript Set() for O(1) lookups
-        for (let type of Object.keys(this.stopwords)){
-          this.stopwords[type] = new Set(this.stopwords[type]);
+        for (let stopword_type of Object.keys(this.payload.stopwords)){
+          this.payload.stopwords[stopword_type] = new Set(this.payload.stopwords[stopword_type]);
         }
-      },
-      function onFail() {
-        console.error("Failed to load the LICA classifier payload file.");
+        
+      }.bind(this),
+      function onFailure(){
+        throw "Could not load LICA payload file"
       }
     );
   }
@@ -238,6 +221,10 @@ function LICA(){
 		//Returns a classification in the format [top_level, sub_level, method/reason]
 		//This fits with the mozcat heirarchy/taxonomy: https://github.com/matthewruttley/mozcat
 		
+    if (this.hasOwnProperty('payload')) {
+      throw "LICA's classification function didn't initialize correctly."
+    }
+    
 		if (!url && !title){
 			return ['uncategorized', 'invalid_data', 'empty values'];
 		}
