@@ -46,14 +46,43 @@ let ioService = Cc["@mozilla.org/network/io-service;1"].getService(Ci.nsIIOServi
 
 //module code
 
-function LICA(){
+let lica = function LICA(){
+  //This is an initialization function used to import the payload file
+  //via async read into the classifier.
+  
+  //calculate full payload location
+  let payload_path = OS.Path.join(OS.Constants.Path.desktopDir, this.payload_file_name);
+  
+  let decoder = new TextDecoder();
+  let promise = OS.File.read(payload_path) //read it async
+  
+  return promise.then(
+    function onSuccess(payload_json) {
+      
+      this.payload = JSON.parse(decoder.decode(payload_json));
+      
+      //convert the stopword list to javascript Set() for O(1) lookups
+      for (let stopword_type of Object.keys(this.payload.stopwords)){
+        this.payload.stopwords[stopword_type] = new Set(this.payload.stopwords[stopword_type]);
+      }
+      
+      console.log('initialization success function called and processed, this.payload key length is: ', Object.keys(this.payload).length)
+      
+    }.bind(this),
+    function onFailure(){
+      throw "Could not load LICA payload file"
+    }
+  );
+}
+
+lica.prototype = {
   // Class that can classify a url using LICA.
   
   //Settings
-  this.payload_file_name = "lica_payload.json";
+  payload_file_name: "lica_payload.json",
   
   //Auxiliary functionality
-  this.auxiliary = {
+  auxiliary: {
     parseURL: function(url){
       //Accepts a url e.g.: https://news.politics.bbc.co.uk/thing/something?whatever=1
       //returns a useful dictionary with the components
@@ -94,10 +123,10 @@ function LICA(){
       }
       return words;
     }
-  }
+  },
 
   //Classifier matching helper functionality
-  this.matching = {
+  matching: {
     isBlacklistedDomain: function(parsedURL){
       //check that a tld isn't blacklisted
       //accepts a parsed url
@@ -187,40 +216,11 @@ function LICA(){
       }
       return matches;
     }
-  }
+  },
   
-  //Actual functionality
-  this.init = function(){
-    //This is an initialization function used to import the payload file
-    //via async read into the classifier.
-    
-    //calculate full payload location
-    let payload_path = OS.Path.join(OS.Constants.Path.desktopDir, this.payload_file_name);
-    
-    let decoder = new TextDecoder();
-    let promise = OS.File.read(payload_path) //read it async
-    
-    return promise.then(
-      function onSuccess(payload_json) {
-        
-        console.log('success function called')
-        
-        this.payload = JSON.parse(decoder.decode(payload_json));
-        
-        //convert the stopword list to javascript Set() for O(1) lookups
-        for (let stopword_type of Object.keys(this.payload.stopwords)){
-          this.payload.stopwords[stopword_type] = new Set(this.payload.stopwords[stopword_type]);
-        }
-        
-      }.bind(this),
-      function onFailure(){
-        throw "Could not load LICA payload file"
-      }
-    );
-    
-  }
-  
-	this.classify = function(url="", title=""){
+  //Classification functionality
+	
+  classify: function(url="", title=""){
 		//Returns a classification in the format [top_level, sub_level, method/reason]
 		//This fits with the mozcat heirarchy/taxonomy: https://github.com/matthewruttley/mozcat
 		
@@ -359,8 +359,6 @@ function LICA(){
 		
 		return [top_level_decision, sub_level_decision, 'keyword matching'];
 	}
-
-  this.init();
 }
 
-exports.LICA = LICA;
+exports.LICA = lica;
