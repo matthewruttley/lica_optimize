@@ -1,7 +1,7 @@
 //test out LICA
 
 //First import and load LICA
-var {LICA} = require('./classifier_LICA')
+var {LICA} = require('./classifier_LICA_v0.2')
 var lica = new LICA()
 
 //testing payload
@@ -67,4 +67,9 @@ exports["test classification results"] = function(assert) {
 	}
 }
 
-require("sdk/test").run(exports);
+
+function onSuccess() {
+	require("sdk/test").run(exports);
+}
+
+

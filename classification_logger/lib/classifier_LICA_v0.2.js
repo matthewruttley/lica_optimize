@@ -203,6 +203,8 @@ function LICA(){
     promise = promise.then(
       function onSuccess(payload_json) {
         
+        console.log('success function called')
+        
         this.payload = JSON.parse(decoder.decode(payload_json));
         
         //convert the stopword list to javascript Set() for O(1) lookups
@@ -221,7 +223,7 @@ function LICA(){
 		//Returns a classification in the format [top_level, sub_level, method/reason]
 		//This fits with the mozcat heirarchy/taxonomy: https://github.com/matthewruttley/mozcat
 		
-    if (this.hasOwnProperty('payload')) {
+    if (!this.hasOwnProperty('payload')) {
       throw "LICA's classification function didn't initialize correctly."
     }
     
