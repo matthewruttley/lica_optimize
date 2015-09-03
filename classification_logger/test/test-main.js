@@ -52,8 +52,8 @@ tests = [
 ]
 
 //Import and load LICA
-var {LICA} = require('./classifier_LICA_v0.2')
-var lica = new LICA()
+var {loadLICA} = require('./classifier_LICA_v0.2')
+var lica = new loadLICA()
 
 //testing functionality
 
