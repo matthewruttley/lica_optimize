@@ -29,7 +29,7 @@ def parseURL(url):
 	extract(url):
 		ExtractResult(subdomain='sports.au', domain='yahoo', suffix='com')	
 	"""
-	
+	url = url.lower()
 	url_components = urlparse(url)
 	tld_components = tld_extract(url)
 	
@@ -79,7 +79,7 @@ def process_files(output_file='lica_payload.json'):
 	payload_files = get_remote_payloads() #get all the files needed
 	
 	final_payload = { #create 
-		"domain_rules": payload_files['domain_rules']['domain_rules'],
+		"domain_rules": {},
 		"host_rules": {},
 		"path_rules": {},
 		"ignore_domains": payload_files['keywords']['ignore_domains'],
@@ -107,6 +107,11 @@ def process_files(output_file='lica_payload.json'):
 			for keyword in keywords:
 				final_payload['keywords'][keyword] = [top_level, sub_level]
 	
+	#map domain rules to [top, sub]
+	for domain, category in payload_files['domain_rules']['domain_rules'].iteritems():
+		category = taxonomy_lookup[category]
+		final_payload['domain_rules'][domain] = category
+	
 	#convert host rules
 	#from: 	"au.movies.yahoo.com": "television",
 	#to:	"yahoo.com": { 'au.movies':  ['arts & entertainment', 'television'] }
@@ -123,14 +128,11 @@ def process_files(output_file='lica_payload.json'):
 	
 	#convert the path rules into an easily searchable format
 	for path, category in payload_files['domain_rules']['path_rules'].iteritems():
-		components = path.split('/')
-		domain = components[0]
-		path = components[1]
+		components = parseURL(path)
+		if components['tld'] not in final_payload['path_rules']:
+			final_payload['path_rules'][components['tld']] = {}
 		
-		if domain not in final_payload['path_rules']:
-			final_payload['path_rules'][domain] = {}
-		
-		final_payload['path_rules'][domain] = taxonomy_lookup[category]
+		final_payload['path_rules'][components['tld']][components['path'][1]] = taxonomy_lookup[category]
 	
 	#write to file
 	with copen(output_file, 'w', encoding='utf8') as f:

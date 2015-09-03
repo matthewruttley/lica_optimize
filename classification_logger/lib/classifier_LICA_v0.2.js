@@ -46,23 +46,29 @@ let ioService = Cc["@mozilla.org/network/io-service;1"].getService(Ci.nsIIOServi
 
 //module code
 
-exports.loadLICA = function () {
+exports.LICA = function () {
+    function payloadPath(){
+      return OS.Path.join(OS.Constants.Path.desktopDir, "lica_payload.json");
+    }
+    
+    function deepCopy(obj){
+      //deep copies an object to prevent assignment of extra elements to the payload
+      let copy = JSON.parse(JSON.stringify(obj))
+      return copy
+    }
   
-    function LICA(payload) {
-      this.payload = JSON.parse(decoder.decode(payload_json));
+    function LICA(payload_text) {
+      let decoder = new TextDecoder();
+      this.payload = JSON.parse(decoder.decode(payload_text));
       //convert the stopword list to javascript Set() for O(1) lookups
       for (let stopword_type of Object.keys(this.payload.stopwords)){
         this.payload.stopwords[stopword_type] = new Set(this.payload.stopwords[stopword_type]);
       }
-      console.log('initialization success function called and processed, this.payload key length is: ', Object.keys(this.payload).length);
       return this;
     }
     
     // LICA methods
     Object.assign(LICA.prototype, {
-      payloadPath: function(){
-        return OS.Path.join(OS.Constants.Path.desktopDir, "lica_payload.json");
-      },
       parseURL: function(url){
         //Accepts a url e.g.: https://news.politics.bbc.co.uk/thing/something?whatever=1
         //returns a useful dictionary with the components
@@ -72,7 +78,9 @@ exports.loadLICA = function () {
           throw "No valid url scheme found";
         }
         
-        url = ioService.newURI(url.toLowerCase(), null, null);
+        url = url.toLowerCase()
+        
+        url = ioService.newURI(url, null, null);
         let components = {};
         
         components.suffix = eTLDService.getPublicSuffix(url); //co.uk
@@ -96,7 +104,7 @@ exports.loadLICA = function () {
         //also removes english stopwords
         let matcher_string = url+" "+title;
         let words = [];
-        for (let word of matcher_string.match(/[a-z]{3,}/g)) { //must be at least 3 characters each
+        for (let word of matcher_string.toLowerCase().match(/[a-z]{3,}/g)) { //must be at least 3 characters each
           if (!this.payload.stopwords.english.has(word)) { //make sure its not a stopword
             words.push(word);
           }
@@ -120,8 +128,8 @@ exports.loadLICA = function () {
         //returns either a classification [top level, sub level, 'single_topic_site'],
         //or false
         if (this.payload.domain_rules.hasOwnProperty(parsedURL.tld)) {
-          let tmpResult = this.payload.domain_rules[parsedURL.tld];
-          tmpResult.push(['single_topic_site']);
+          let tmpResult = deepCopy(this.payload.domain_rules[parsedURL.tld]);
+          tmpResult.push('single topic site');
           return tmpResult;
         }
         return false;
@@ -132,11 +140,12 @@ exports.loadLICA = function () {
         //returns either a classification [top level, sub level, 'single_topic_subdomain'],
         //or false
         let subdomain = parsedURL.host;
+        
         if (subdomain.length > 0) {
           if (this.payload.host_rules.hasOwnProperty(parsedURL.tld)) {
             if (this.payload.host_rules[parsedURL.tld].hasOwnProperty(subdomain)) {
-              tmpResult = this.payload.host_rules[parsedURL.tld][subdomain];
-              tmpResult.push(['single_topic_subdomain']);
+              let tmpResult = deepCopy(this.payload.host_rules[parsedURL.tld][subdomain]);
+              tmpResult.push('single topic subdomain');
               return tmpResult;
             }
           }
@@ -155,8 +164,8 @@ exports.loadLICA = function () {
               //note that this currently only checks 1 level of path
               //i.e. these are the same:
               // domain.com/tech and domain.com/tech/apple
-              let tmpResult = this.payload.path_rules[parsedURL.tld][first_chunk]; 
-              tmpResult.push(['single_topic_path']); 
+              let tmpResult = deepCopy(this.payload.path_rules[parsedURL.tld][first_chunk]);
+              tmpResult.push('single topic path'); 
               return tmpResult;
             }
           }
@@ -207,19 +216,19 @@ exports.loadLICA = function () {
         if (url) {
           //parse the url and return false if it is invalid
           try {
-            var parsed_url = this.auxiliary.parseURL(url);
+            var parsed_url = this.parseURL(url);
           }catch(e){
-            return ['uncategorized', 'url parse error', e];
+            return ['uncategorized', 'invalid url', "nsi error"];
           }
           
           //first check that its not a blacklisted domain
-          if (this.matching.isBlacklistedDomain(parsed_url)) {
+          if (this.isBlacklistedDomain(parsed_url)) {
             return ['uncategorized', 'ignored', 'ignored domain'];
           }
           
           //check if it is a single topic site, host or path
           for (let checker of ['isSingleTopicSite', 'isSingleTopicHost', 'isSingleTopicPath']) {
-            let decision = this.matching[checker](parsed_url);
+            let decision = this[checker](parsed_url);
             if (decision){
               return decision;
             }
@@ -228,11 +237,11 @@ exports.loadLICA = function () {
         
         //URL is not recognized in the domain payloads, so we now try to classify it using keywords
         
-        let words = this.auxiliary.tokenize(url, title); //tokenize the url (i.e. extract things that may be words)
+        let words = this.tokenize(url, title); //tokenize the url (i.e. extract things that may be words)
         
         // check that there are no ignored web words like "login" (don't want to catch some
         // accidentally unencrypted personal data)
-        if (this.matching.containsStopwords(words, 'web')) {
+        if (this.containsStopwords(words, 'web')) {
           return ['uncategorized', 'ignored', 'ignored words']; 
         }
         
@@ -249,7 +258,7 @@ exports.loadLICA = function () {
         //		}
         //	}
         
-        let matches = this.matching.tallyKeywords(words);
+        let matches = this.tallyKeywords(words, 'english');
         
         //if nothing was found, return unknown
         if (Object.keys(matches).length === 0) {
@@ -281,10 +290,10 @@ exports.loadLICA = function () {
           }
           
           top_level_ranking.push([top_level_cat, sum_of_child_values]);
-          sub_level_items.sort(this.auxiliary.compareSecondColumn).reverse();
+          sub_level_items.sort(this.compareSecondColumn).reverse();
           item_tree[top_level_cat] = sub_level_items;
         }
-        top_level_ranking.sort(this.auxiliary.compareSecondColumn).reverse();
+        top_level_ranking.sort(this.compareSecondColumn).reverse();
         
         //Now we have a decisioning process.
         // - If there's only one result, it must be that one
@@ -321,7 +330,7 @@ exports.loadLICA = function () {
           sub_level_decision = item_tree[top_level_decision][0][0];
         }else{
           //sort them
-          possible_sub_levels.sort(this.auxiliary.compareSecondColumn).reverse();
+          possible_sub_levels.sort(this.compareSecondColumn).reverse();
           if (possible_sub_levels[0][1] === possible_sub_levels[1][1]) { //special case if the top two are the same
             sub_level_decision = 'general';
           }else{
@@ -335,11 +344,9 @@ exports.loadLICA = function () {
 
     // Asynchronously load the LICA data set. Return a Promise for a LICA object.
     function loadLICA() {
-        return OS.File.read(payloadPath()).then(payloadJSON => {
-            let decoder = new TextDecoder();
-            var payload = JSON.parse(decoder.decode(payload_json));
-            return new LICA(payload);
+        return OS.File.read(payloadPath()).then(payload_text => {
+            return new LICA(payload_text);
         });
     }
     return loadLICA;
-}
+}();
