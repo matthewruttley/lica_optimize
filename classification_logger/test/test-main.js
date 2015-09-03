@@ -63,8 +63,8 @@ exports["test classification results"] = function(assert) {
       for (let test of tests) {
         result = licaObj.classify(test.url);
         //diagnostics
-        if (JSON.stringify(result) == JSON.stringify(test.expected_result)) {validity='valid'}else{validity='invalid'}
-        console.log('expected: ' + test.expected_result + " and got " + result + " which is " + validity)
+        //if (JSON.stringify(result) == JSON.stringify(test.expected_result)) {validity='valid'}else{validity='invalid'}
+        //console.log('expected: ' + test.expected_result + " and got " + result + " which is " + validity)
         assert.ok(JSON.stringify(result) == JSON.stringify(test.expected_result), test.name);
       }
       
