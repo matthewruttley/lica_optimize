@@ -57,7 +57,7 @@ var lica = new LICA()
 
 //testing functionality
 
-exports["test classification results"] = function(assert) {
+exports["test classification results"] = function(assert, done) {
   lica.then(
     function onSuccess(licaObj) {
       for (let test of tests) {
@@ -67,7 +67,7 @@ exports["test classification results"] = function(assert) {
         //console.log('expected: ' + test.expected_result + " and got " + result + " which is " + validity)
         assert.ok(JSON.stringify(result) == JSON.stringify(test.expected_result), test.name);
       }
-      
+      done(); //indicate testing is over
     }
   )
 }
