@@ -45,7 +45,7 @@ let ioService = Cc["@mozilla.org/network/io-service;1"].getService(Ci.nsIIOServi
 
 exports.LICA = function () {
     function payloadPath(){
-      return OS.Path.join(OS.Constants.Path.desktopDir, "lica_payload.json");
+      return "lica_payload.json"
     }
     
     function deepCopy(obj){

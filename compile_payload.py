@@ -1,12 +1,13 @@
 #Python Script that compiles the LICA payload together
 
 from sys import argv
-from json import loads, dump
+from json import load, loads, dump
 from codecs import open as copen
 from urlparse import urlparse
 
 from requests import get
 from tldextract import extract as tld_extract
+from pymongo import MongoClient
 
 #SETTINGS
 
@@ -40,6 +41,35 @@ def parseURL(url):
 	}
 	
 	return components
+
+def get_bucketerer_sites():
+	"""Gets single topic sites from bucketerer"""
+	
+	#c = MongoClient('ec2-52-26-171-62.us-west-2.compute.amazonaws.com')
+	#
+	#data = {}
+	#
+	#for entry in c['bucketerer']['adgroups'].find():
+	#	sites = entry['sites']
+	#	category = entry['name']
+	#	data[category] = sites
+	
+	with open('adgroup_dump.json') as f:
+		data = load(f)
+	
+	return data
+
+def bucketerer_to_mozcat():
+	"""Maps bucketerer categories to mozcat categories. Loads a json file and returns a dict"""
+	
+	with open('bucketerer_to_mozcat_mappings.json') as f:
+		data = load(f)
+	
+	mapping = {}
+	for k, v in data.iteritems():
+		mapping[k] = v.split('/') #process the mozcat names
+	
+	return mapping
 
 def get_remote_payloads():
 	"""imports the datasets/paylod files and returns them in a dictionary"""
@@ -110,7 +140,17 @@ def process_files(output_file='lica_payload.json'):
 	#map domain rules to [top, sub]
 	for domain, category in payload_files['domain_rules']['domain_rules'].iteritems():
 		category = taxonomy_lookup[category]
-		final_payload['domain_rules'][domain] = category
+		if category != 'not in use': #category is not an interest category
+			final_payload['domain_rules'][domain] = category
+	
+	#add in the bucketerer domain rules too
+	bucketerer_data = get_bucketerer_sites()
+	bucketerer_mapping = bucketerer_to_mozcat()
+	for category, sites in bucketerer_data.iteritems():
+		category = bucketerer_mapping[category]
+		for site in sites:
+			if site not in final_payload['domain_rules']:
+				final_payload['domain_rules'][site] = category
 	
 	#convert host rules
 	#from: 	"au.movies.yahoo.com": "television",
