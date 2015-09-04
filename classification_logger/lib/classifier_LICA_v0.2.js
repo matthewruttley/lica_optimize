@@ -32,9 +32,6 @@
 
 "use strict";
 
-//todo:
-// - bigram matching working?
-
 //import firefox services
 
 const {data} = require('sdk/self'); //used to reference files in the /data folder
@@ -183,6 +180,16 @@ exports.LICA = function () {
       },
       tallyKeywords: function(words, stopword_type){
         //creates a keyword tally as a nested javascript object
+        //also checks for bigrams
+        
+        if (words.length > 1) {
+          let bigrams = [];
+          for (let x=0;x<words.length-1;x++) {
+            bigrams.push(words[x] + " " + words[x+1]);
+          }
+          words = words.concat(bigrams)
+        };
+        
         let matches = {};
         for (let word of words) {
           if (!this.payload.stopwords[stopword_type].hasOwnProperty(word)) {

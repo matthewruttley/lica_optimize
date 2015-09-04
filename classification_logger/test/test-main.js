@@ -9,6 +9,11 @@ tests = [
 		'expected_result': ['hobbies & interests', 'coins', 'keyword matching']
 	},
 	{
+		'name': "Bigram classification",
+		'url': 'http://www.very-expensive.com/real-estate/',
+		'expected_result': ['real estate', 'general', 'keyword matching']
+	},
+	{
 		'name': "Single topic TLD",
 		'url': 'http://taste.com.au',
 		'expected_result': ["food & drink","cooking","single topic site"]
@@ -63,8 +68,8 @@ exports["test classification results"] = function(assert, done) {
       for (let test of tests) {
         result = licaObj.classify(test.url);
         //diagnostics
-        //if (JSON.stringify(result) == JSON.stringify(test.expected_result)) {validity='valid'}else{validity='invalid'}
-        //console.log('expected: ' + test.expected_result + " and got " + result + " which is " + validity)
+        if (JSON.stringify(result) == JSON.stringify(test.expected_result)) {validity='valid'}else{validity='invalid'}
+        console.log('expected: ' + test.expected_result + " and got " + result + " which is " + validity)
         assert.ok(JSON.stringify(result) == JSON.stringify(test.expected_result), test.name);
       }
       done(); //indicate testing is over
